@@ -2,6 +2,20 @@ import os
 from openai import OpenAI
 from dotenv import load_dotenv
 from openai import APIStatusError, APITimeoutError 
+from pydantic import BaseModel, Field
+
+class CityInfo(BaseModel):
+    """Kullanıcı tarafından verilen şehir hakkında bilgi içerir."""
+    
+    city_name: str = Field(
+        description="Şehrin tam adı."
+    )
+    population_2024: int = Field(
+        description="Şehrin 2024 yılındaki tahmini nüfusu."
+    )
+    short_summary: str = Field(
+        description="Şehirle ilgili 20 kelimeyi geçmeyen kısa ve ilgi çekici bir özet."
+    )
 
 load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
@@ -13,30 +27,51 @@ if not api_key or "dummy" in api_key.lower(): # Anahtarın varlığını ve ger�
 try:
     client = OpenAI(
         api_key=api_key,
-        # Timeout ayarı: İstek 15 saniyede yanıt vermezse zaman aşımına uğrar.
-        timeout=15.0 
+        timeout=25.0 
     )
 
     print("✅ OpenAI İstemcisi Başarıyla Kuruldu.")
 
 
-    print("\n⏳ AI İsteği Gönderiliyor...")
+
+    print("\n⏳ AI İsteği Gönderiliyor (JSON Formatında)...")
     
     response = client.chat.completions.create(
-        model="gpt-3.5-turbo", 
+        
+        model="gpt-3.5-turbo-0125", 
         messages=[
-            {"role": "system", "content": "Sen yardımsever ve kısa cevaplar veren bir asistansın."},
-            {"role": "user", "content": "Denizlerdeki en büyük canlı nedir ve neden bu kadar büyümüştür?"}
+            
+            {"role": "system", "content": "Sen, kullanıcıdan gelen istek üzerine sadece JSON formatında, Pydantic şemasına uygun yanıt üreten bir asistansın."},
+            
+            
+            {"role": "user", "content": "New York şehri hakkında bilgi ver."},
         ],
-        temperature=0.6, 
-        max_tokens=100    
+        temperature=0.0, # Yapılandırılmış çıktı istediğimiz için yaratıcılığı (rastgeleliği) sıfıra yakın tutarız.
+        max_tokens=500,  # Token limitini JSON'u kapsayacak şekilde ayarlıyoruz.
+        
+        # KRİTİK AYAR: Modelin JSON nesnesi döndürmesini zorunlu kılıyoruz
+        response_format={"type": "json_object"},
     )
+    
+    ai_yanit_json_string = response.choices[0].message.content
+    print("\n🤖 AI Yanıtı (Ham JSON Stringi):")
+    print("--------------------------------------------------")
+    print(ai_yanit_json_string)
+    print("--------------------------------------------------")
 
-    ai_yanit = response.choices[0].message.content
-    print("\n🤖 AI Yanıtı:")
-    print("--------------------------------------------------")
-    print(ai_yanit)
-    print("--------------------------------------------------")
+
+    import json
+    try:
+        data = json.loads(ai_yanit_json_string)
+        validated_data = CityInfo(**data)
+        
+        print("\n✅ Doğrulama Başarılı! (Pydantic ile):")
+        print(f"  Şehir Adı (Doğrulanmış): {validated_data.city_name}")
+        print(f"  Nüfus (Doğrulanmış, Integer): {validated_data.population_2024}")
+        print(f"  Özet (Doğrulanmış): {validated_data.short_summary}")
+        
+    except Exception as e:
+        print(f"\n❌ JSON Doğrulama Hatası: Gelen çıktı beklenen şemaya uymadı. Hata: {e}")
 
 
 except APITimeoutError:
