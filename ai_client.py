@@ -1,12 +1,12 @@
 import os
-from openai import OpenAI
+import json
+import google.generativeai as genai
 from dotenv import load_dotenv
-from openai import APIStatusError, APITimeoutError 
 from pydantic import BaseModel, Field
 
 class CityInfo(BaseModel):
     """Kullanıcı tarafından verilen şehir hakkında bilgi içerir."""
-    
+
     city_name: str = Field(
         description="Şehrin tam adı."
     )
@@ -18,65 +18,72 @@ class CityInfo(BaseModel):
     )
 
 load_dotenv()
-api_key = os.getenv("OPENAI_API_KEY")
+api_key = os.getenv("OPENAI_API_KEY")  
 
-if not api_key or "dummy" in api_key.lower(): # Anahtarın varlığını ve gerçekliğini kontrol et
-    print("🚨 HATA: OPENAI_API_KEY ayarlanmadı veya test anahtarı kullanılıyor. Lütfen .env dosyanızı gerçek API anahtarınızla güncelleyin.")
+if not api_key or "dummy" in api_key.lower():
+    print("🚨 HATA: API anahtarı ayarlanmadı veya test anahtarı kullanılıyor. Lütfen .env dosyanızı gerçek API anahtarınızla güncelleyin.")
     exit()
 
 try:
-    client = OpenAI(
-        api_key=api_key,
-        timeout=25.0 
-    )
+    
+    genai.configure(api_key=api_key)
 
-    print("✅ OpenAI İstemcisi Başarıyla Kuruldu.")
+    
+    model = genai.GenerativeModel('gemini-2.5-flash')
 
-
+    print("✅ Gemini İstemcisi Başarıyla Kuruldu.")
 
     print("\n⏳ AI İsteği Gönderiliyor (JSON Formatında)...")
-    
-    response = client.chat.completions.create(
-        
-        model="gpt-3.5-turbo-0125", 
-        messages=[
-            
-            {"role": "system", "content": "Sen, kullanıcıdan gelen istek üzerine sadece JSON formatında, Pydantic şemasına uygun yanıt üreten bir asistansın."},
-            
-            
-            {"role": "user", "content": "New York şehri hakkında bilgi ver."},
-        ],
-        temperature=0.0, # Yapılandırılmış çıktı istediğimiz için yaratıcılığı (rastgeleliği) sıfıra yakın tutarız.
-        max_tokens=500,  # Token limitini JSON'u kapsayacak şekilde ayarlıyoruz.
-        
-        # KRİTİK AYAR: Modelin JSON nesnesi döndürmesini zorunlu kılıyoruz
-        response_format={"type": "json_object"},
+
+    # Prompt'u JSON formatında yanıt vermesi için hazırlıyoruz
+    prompt = """New York şehri hakkında bilgi ver ve yanıtı şu JSON formatında ver:
+{
+    "city_name": "şehir adı",
+    "population_2024": nüfus,
+    "short_summary": "kısa özet"
+}"""
+
+    # API çağrısı
+    response = model.generate_content(
+        prompt,
+        generation_config=genai.GenerationConfig(
+            temperature=0.0,
+            max_output_tokens=500,
+        )
     )
-    
-    ai_yanit_json_string = response.choices[0].message.content
+
+    # Yanıt kontrolü
+    if not response.candidates or not response.candidates[0].content.parts:
+        print(f"\n⚠️  API yanıt vermedi. Finish reason: {response.candidates[0].finish_reason if response.candidates else 'Bilinmiyor'}")
+        exit()
+
+    ai_yanit_json_string = response.text
     print("\n🤖 AI Yanıtı (Ham JSON Stringi):")
     print("--------------------------------------------------")
     print(ai_yanit_json_string)
     print("--------------------------------------------------")
 
-
-    import json
+    # JSON parsing ve Pydantic doğrulama
     try:
-        data = json.loads(ai_yanit_json_string)
+        # Yanıt bazen markdown kod bloğu içinde gelebilir, temizleyelim
+        clean_json = ai_yanit_json_string.strip()
+        if clean_json.startswith("```"):
+            # Markdown kod bloğunu temizle
+            clean_json = clean_json.split("```")[1]
+            if clean_json.startswith("json"):
+                clean_json = clean_json[4:]
+            clean_json = clean_json.strip()
+
+        data = json.loads(clean_json)
         validated_data = CityInfo(**data)
-        
+
         print("\n✅ Doğrulama Başarılı! (Pydantic ile):")
         print(f"  Şehir Adı (Doğrulanmış): {validated_data.city_name}")
         print(f"  Nüfus (Doğrulanmış, Integer): {validated_data.population_2024}")
         print(f"  Özet (Doğrulanmış): {validated_data.short_summary}")
-        
+
     except Exception as e:
         print(f"\n❌ JSON Doğrulama Hatası: Gelen çıktı beklenen şemaya uymadı. Hata: {e}")
 
-
-except APITimeoutError:
-    print("\n❌ Hata: API isteği zaman aşımına uğradı.")
-except APIStatusError as e:
-    print(f"\n❌ Hata: API'den bir durum hatası döndü ({e.status_code}).")
 except Exception as e:
     print(f"\n❌ Beklenmedik bir hata oluştu: {e}")
