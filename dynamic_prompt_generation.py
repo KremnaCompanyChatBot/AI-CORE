@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+from persona import fetch_persona
 
 TEST_SYSTEM_PROMPT = """
 SEN BİR YARDIMCI ASİSTANSIN.
