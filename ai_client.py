@@ -1,89 +1,277 @@
+"""
+AI İstemci Modülü
+
+Google Gemini API kullanarak persona tabanlı sohbet uygulaması.
+"""
+
 import os
-import json
+from typing import Optional, Dict, Any
 import google.generativeai as genai
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field
 
-class CityInfo(BaseModel):
-    """Kullanıcı tarafından verilen şehir hakkında bilgi içerir."""
+from persona import fetch_persona
 
-    city_name: str = Field(
-        description="Şehrin tam adı."
-    )
-    population_2024: int = Field(
-        description="Şehrin 2024 yılındaki tahmini nüfusu."
-    )
-    short_summary: str = Field(
-        description="Şehirle ilgili 20 kelimeyi geçmeyen kısa ve ilgi çekici bir özet."
-    )
 
-load_dotenv()
-api_key = os.getenv("OPENAI_API_KEY")  
+# Sabitler
+DEFAULT_TEMPERATURE = 0.7
+MAX_OUTPUT_TOKENS = 500
+GEMINI_MODEL_NAME = "gemini-2.5-flash"
 
-if not api_key or "dummy" in api_key.lower():
-    print("🚨 HATA: API anahtarı ayarlanmadı veya test anahtarı kullanılıyor. Lütfen .env dosyanızı gerçek API anahtarınızla güncelleyin.")
-    exit()
+# Çıkış komutları
+EXIT_COMMANDS = ["exit", "q", "quit"]
 
-try:
+
+class AIClientError(Exception):
+    """AI istemci hatalarını temsil eder."""
+    pass
+
+
+def load_api_configuration() -> str:
+    """
+    Ortam değişkenlerinden API anahtarını yükler ve doğrular.
     
+    Dönüş Değeri:
+        str: Geçerli API anahtarı
+        
+    Hatalar:
+        AIClientError: API anahtarı eksik veya geçersizse
+    """
+    load_dotenv()
+    
+    # Geriye dönük uyumluluk için OPENAI_API_KEY kullanılıyor
+    api_key = os.getenv("OPENAI_API_KEY")
+    
+    if not api_key or "dummy" in api_key.lower():
+        raise AIClientError(
+            "OPENAI_API_KEY eksik veya geçersiz. "
+            "Lütfen .env dosyanızı kontrol edin."
+        )
+    
+    return api_key
+
+
+def initialize_gemini_model(api_key: str) -> genai.GenerativeModel:
+    """
+    Gemini AI modelini yapılandırır ve başlatır.
+    
+    Parametreler:
+        api_key: Google AI API anahtarı
+        
+    Dönüş Değeri:
+        GenerativeModel: Yapılandırılmış Gemini modeli
+    """
     genai.configure(api_key=api_key)
+    return genai.GenerativeModel(GEMINI_MODEL_NAME)
 
+
+def load_backend_configuration() -> Dict[str, Optional[str]]:
+    """
+    Backend panel yapılandırma değerlerini ortam değişkenlerinden yükler.
     
-    model = genai.GenerativeModel('gemini-2.5-flash')
+    Dönüş Değeri:
+        Dict[str, Optional[str]]: Backend yapılandırma parametreleri
+    """
+    return {
+        "url": os.getenv("BACKEND_PANEL_URL"),
+        "token": os.getenv("BACKEND_PANEL_TOKEN"),
+        "ably_channel": os.getenv("BACKEND_PANEL_ABLY_CHANNEL"),
+        "ably_api_key": os.getenv("BACKEND_PANEL_ABLY_API_KEY")
+    }
 
-    print("✅ Gemini İstemcisi Başarıyla Kuruldu.")
 
-    print("\n⏳ AI İsteği Gönderiliyor (JSON Formatında)...")
+def load_persona(config: Dict[str, Optional[str]]) -> Optional[Dict[str, Any]]:
+    """
+    Backend panel'den persona bilgilerini yükler.
+    
+    Parametreler:
+        config: Backend yapılandırma parametreleri
+        
+    Dönüş Değeri:
+        Optional[Dict[str, Any]]: Persona verisi veya None
+    """
+    # Backend panel URL veya Ably kanalı yoksa persona yükleme
+    if not (config["url"] or config["ably_channel"]):
+        return None
+    
+    try:
+        persona = fetch_persona(
+            config["url"],
+            token=config["token"],
+            ably_channel=config["ably_channel"],
+            ably_api_key=config["ably_api_key"]
+        )
+        
+        persona_name = persona.get("name") or "(isimsiz)"
+        print(f"✅ Persona backend'den yüklendi: {persona_name}")
+        return persona
+        
+    except Exception as e:
+        print(f"⚠️ Persona backend'den yüklenemedi: {e}")
+        return None
 
-    # Prompt'u JSON formatında yanıt vermesi için hazırlıyoruz
-    prompt = """New York şehri hakkında bilgi ver ve yanıtı şu JSON formatında ver:
-{
-    "city_name": "şehir adı",
-    "population_2024": nüfus,
-    "short_summary": "kısa özet"
-}"""
 
-    # API çağrısı
+def build_persona_prefix(persona: Dict[str, Any]) -> str:
+    """
+    Persona bilgilerinden prefix string oluşturur.
+    
+    Parametreler:
+        persona: Persona bilgileri
+        
+    Dönüş Değeri:
+        str: Persona prefix string'i
+    """
+    parts = []
+    
+    if persona.get("name"):
+        parts.append(f"Persona adı: {persona.get('name')}")
+    
+    if persona.get("tone"):
+        parts.append(f"Ton: {persona.get('tone')}")
+    
+    if persona.get("constraints"):
+        parts.append(f"Kısıtlamalar: {persona.get('constraints')}")
+    
+    return " | ".join(parts) if parts else ""
+
+
+def create_full_prompt(user_prompt: str, persona: Optional[Dict[str, Any]]) -> str:
+    """
+    Kullanıcı prompt'una persona bilgilerini ekler.
+    
+    Parametreler:
+        user_prompt: Kullanıcının girdiği prompt
+        persona: Persona bilgileri (opsiyonel)
+        
+    Dönüş Değeri:
+        str: Persona bilgileri eklenmiş tam prompt
+    """
+    if not persona:
+        return user_prompt
+    
+    persona_prefix = build_persona_prefix(persona)
+    
+    if persona_prefix:
+        return f"{persona_prefix}\n\n{user_prompt}"
+    
+    return user_prompt
+
+
+def generate_response(
+    model: genai.GenerativeModel,
+    prompt: str
+) -> Optional[str]:
+    """
+    AI modelinden yanıt oluşturur.
+    
+    Parametreler:
+        model: Gemini AI modeli
+        prompt: Gönderilecek prompt
+        
+    Dönüş Değeri:
+        Optional[str]: Model yanıtı veya None
+    """
     response = model.generate_content(
         prompt,
-        generation_config=genai.GenerationConfig(
-            temperature=0.0,
-            max_output_tokens=500,
-        )
+        generation_config={
+            "temperature": DEFAULT_TEMPERATURE,
+            "max_output_tokens": MAX_OUTPUT_TOKENS,
+        }
     )
+    
+    if response and response.text:
+        return response.text.strip()
+    
+    return None
 
-    # Yanıt kontrolü
-    if not response.candidates or not response.candidates[0].content.parts:
-        print(f"\n⚠️  API yanıt vermedi. Finish reason: {response.candidates[0].finish_reason if response.candidates else 'Bilinmiyor'}")
-        exit()
 
-    ai_yanit_json_string = response.text
-    print("\n🤖 AI Yanıtı (Ham JSON Stringi):")
+def display_response(response: Optional[str]) -> None:
+    """
+    Model yanıtını formatlı şekilde ekrana yazdırır.
+    
+    Parametreler:
+        response: Gösterilecek yanıt
+    """
+    if not response:
+        print("⚠️ Model boş bir yanıt döndürdü.")
+        return
+    
+    print("🤖 Yanıt:")
     print("--------------------------------------------------")
-    print(ai_yanit_json_string)
-    print("--------------------------------------------------")
+    print(response)
+    print("--------------------------------------------------\n")
 
-    # JSON parsing ve Pydantic doğrulama
+
+def run_chat_loop(
+    model: genai.GenerativeModel,
+    persona: Optional[Dict[str, Any]]
+) -> None:
+    """
+    Ana sohbet döngüsünü çalıştırır.
+    
+    Parametreler:
+        model: Gemini AI modeli
+        persona: Persona bilgileri (opsiyonel)
+    """
+    print("💬 Sohbeti sonlandırmak için 'exit', 'q' veya 'quit' yazın.\n")
+    
+    while True:
+        try:
+            user_prompt = input("🧠 Prompt: ").strip()
+             
+            # Çıkış kontrolü
+            if user_prompt.lower() in EXIT_COMMANDS:
+                print("👋 Sohbet sonlandırıldı.")
+                break
+            
+            # Boş prompt kontrolü
+            if not user_prompt:
+                print("⚠️ Lütfen geçerli bir prompt girin.")
+                continue
+            
+            # Tam prompt oluştur (persona ile)
+            full_prompt = create_full_prompt(user_prompt, persona)
+            
+            print("\n⏳ Yanıt oluşturuluyor...\n")
+            
+            # Yanıt üret ve göster
+            response = generate_response(model, full_prompt)
+            display_response(response)
+            
+        except KeyboardInterrupt:
+            print("\n🛑 Kullanıcı tarafından durduruldu.")
+            break
+            
+        except Exception as e:
+            print(f"❌ Beklenmeyen hata: {e}\n")
+
+
+def main() -> None:
+    """Ana program giriş noktası."""
     try:
-        # Yanıt bazen markdown kod bloğu içinde gelebilir, temizleyelim
-        clean_json = ai_yanit_json_string.strip()
-        if clean_json.startswith("```"):
-            # Markdown kod bloğunu temizle
-            clean_json = clean_json.split("```")[1]
-            if clean_json.startswith("json"):
-                clean_json = clean_json[4:]
-            clean_json = clean_json.strip()
-
-        data = json.loads(clean_json)
-        validated_data = CityInfo(**data)
-
-        print("\n✅ Doğrulama Başarılı! (Pydantic ile):")
-        print(f"  Şehir Adı (Doğrulanmış): {validated_data.city_name}")
-        print(f"  Nüfus (Doğrulanmış, Integer): {validated_data.population_2024}")
-        print(f"  Özet (Doğrulanmış): {validated_data.short_summary}")
-
+        # API anahtarını yükle ve doğrula
+        api_key = load_api_configuration()
+        
+        # Gemini modelini başlat
+        model = initialize_gemini_model(api_key)
+        print("✅ Gemini istemcisi başarıyla başlatıldı.")
+        
+        # Backend yapılandırmasını yükle
+        backend_config = load_backend_configuration()
+        
+        # Persona'yı yükle (varsa)
+        persona = load_persona(backend_config)
+        
+        # Sohbet döngüsünü başlat
+        run_chat_loop(model, persona)
+        
+    except AIClientError as e:
+        print(f"🚨 HATA: {e}")
+        exit(1)
+        
     except Exception as e:
-        print(f"\n❌ JSON Doğrulama Hatası: Gelen çıktı beklenen şemaya uymadı. Hata: {e}")
+        print(f"🚨 Beklenmeyen Hata: {e}")
+        exit(1)
 
-except Exception as e:
-    print(f"\n❌ Beklenmedik bir hata oluştu: {e}")
+
+if __name__ == "__main__":
+    main()
