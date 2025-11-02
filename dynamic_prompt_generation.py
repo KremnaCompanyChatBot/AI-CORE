@@ -45,12 +45,10 @@ def build_prompt():
             tone = persona_config["tone"]
             constraints_list = persona_config["constraints"]
 
-            formatted_constraints = "\n".join([f"- {rule}" for rule in constraints_list])
-
             system_prompt = TEST_SYSTEM_PROMPT.format(
                 name=name,
                 tone=tone,
-                constraints_list=formatted_constraints
+                constraints_list=constraints_list
             )
 
             print("\n\n--- OLUŞTURULAN SYSTEM PROMPT ---")
