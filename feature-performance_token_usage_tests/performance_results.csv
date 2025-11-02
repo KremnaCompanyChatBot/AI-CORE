@@ -1,0 +1,18 @@
+Prompt,Response Time (s),Prompt Tokens,Output Tokens,Total Tokens
+merhaba,10.95,3,2,43
+bana nasıl yardımccı olaccaksın,4.19,11,0,560
+bugünün tarihi nedir,1.2,5,15,46
+pyhton dili nedir,4.55,5,0,554
+türkiyenin başkenti neresidir genel kültür sorusu,1.87,16,13,212
+İngilterenin başkenti neredir,0.71,11,16,65
+Türkiyenin yüz ölçümü kaçtır,2.99,9,20,375
+Güney kore ile kuzey kore neden farklı yönetiliyor genel kültür sorusu,5.16,16,0,565
+güney kore nüfusu kaçtır,4.18,8,0,557
+türkiyenin nüfusu kaçtır genel kültür sorusu,4.35,14,0,563
+haritacılık da ünlü olan kişiler kimlerdi,4.39,12,0,561
+tarih ccoğrafya sayısala mı giriyor sözele mi,4.98,17,0,566
+sayısal dersler nelerdir,4.4,8,0,557
+java dili freameworklar nelerdir,4.89,9,0,558
+6-2,0.81,4,7,36
+matematikte integral ne demektir,4.37,8,0,557
+yüzey geriliminin örnekleri nelerdir,5.05,11,0,560
