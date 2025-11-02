@@ -1,18 +1,18 @@
 """
-Test suite for persona-based dynamic prompt generation with tone validation.
+Persona Tabanlı Dinamik Prompt Oluşturma Test Paketi
 
-This test file contains 20 test scenarios covering formal, playful, and technical tones
-to validate that AI responses match the intended persona tone.
+Bu test dosyası, formal, eğlenceli ve teknik tonları doğrulamak için
+20 test senaryosu içerir ve AI yanıtlarının persona tonuyla eşleştiğini kontrol eder.
 """
 
 import pytest
 from unittest.mock import patch, MagicMock, Mock
-from dynamic_prompt_generation import build_prompt, TEST_SYSTEM_PROMPT
+from dynamic_prompt_generation import build_prompt, SYSTEM_PROMPT_TEMPLATE
 from persona import fetch_persona
 
 
 # ============================================================================
-# TEST DATA: 20 Different Persona Scenarios
+# TEST VERİLERİ: 20 Farklı Persona Senaryosu
 # ============================================================================
 
 FORMAL_PERSONAS = [
@@ -168,16 +168,16 @@ ALL_PERSONAS = FORMAL_PERSONAS + PLAYFUL_PERSONAS + TECHNICAL_PERSONAS
 
 
 # ============================================================================
-# HELPER FUNCTIONS
+# YARDIMCI FONKSİYONLAR
 # ============================================================================
 
 def mock_fetch_persona(persona_data):
-    """Helper function to mock fetch_persona with given persona data."""
+    """Verilen persona verisiyle fetch_persona fonksiyonunu taklit eder."""
     return Mock(return_value=persona_data)
 
 
 def extract_constraints_text(constraints):
-    """Extract constraint text from persona data."""
+    """Persona verisinden kısıtlama metnini çıkarır."""
     if isinstance(constraints, str):
         return constraints
     elif isinstance(constraints, list):
@@ -186,108 +186,107 @@ def extract_constraints_text(constraints):
 
 
 def validate_prompt_contains(prompt_text, keywords):
-    """Validate that prompt contains expected keywords."""
+    """Prompt'un beklenen anahtar kelimeleri içerdiğini doğrular."""
     prompt_lower = prompt_text.lower()
     return all(keyword.lower() in prompt_lower for keyword in keywords)
 
 
 def validate_prompt_avoids(prompt_text, avoid_keywords):
-    """Validate that prompt avoids certain keywords."""
+    """Prompt'un belirli anahtar kelimelerden kaçındığını doğrular."""
     prompt_lower = prompt_text.lower()
     return not any(avoid.lower() in prompt_lower for avoid in avoid_keywords)
 
 
 # ============================================================================
-# TEST CASES: Prompt Generation Tests
+# TEST DURUMLARI: Prompt Oluşturma Testleri
 # ============================================================================
 
 @pytest.mark.parametrize("persona", FORMAL_PERSONAS, ids=[p["name"] for p in FORMAL_PERSONAS])
 def test_formal_persona_prompt_generation(persona):
-    """Test that formal personas generate prompts with formal tone indicators."""
+    """Formal personaların resmi ton göstergeleriyle prompt oluşturduğunu test eder."""
     with patch('dynamic_prompt_generation.fetch_persona', return_value={
         "name": persona["name"],
         "tone": persona["tone"],
         "constraints": persona["constraints"]
     }):
-        with patch('builtins.print'):  # Suppress print output
+        with patch('builtins.print'):  # Print çıktısını bastır
             result = build_prompt()
             
-            # Get the generated prompt by capturing print output
-            # Since build_prompt prints the prompt, we'll test the format function directly
-            system_prompt = TEST_SYSTEM_PROMPT.format(
+            # Print ile yazdırılan prompt'u almak yerine format fonksiyonunu doğrudan test et
+            system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
                 name=persona["name"],
                 tone=persona["tone"],
-                constraints_list=persona["constraints"]
+                constraints=persona["constraints"]
             )
             
-            # Validate prompt structure
+            # Prompt yapısını doğrula
             assert persona["name"] in system_prompt
             assert persona["tone"] in system_prompt
             assert persona["constraints"] in system_prompt
             
-            # Validate expected keywords are present
+            # Beklenen anahtar kelimelerin mevcut olduğunu doğrula
             assert validate_prompt_contains(system_prompt, persona["expected_keywords"])
             
-            # Validate avoided keywords are not present
+            # Kaçınılması gereken kelimelerin olmadığını doğrula
             assert validate_prompt_avoids(system_prompt, persona["expected_avoid"])
 
 
 @pytest.mark.parametrize("persona", PLAYFUL_PERSONAS, ids=[p["name"] for p in PLAYFUL_PERSONAS])
 def test_playful_persona_prompt_generation(persona):
-    """Test that playful personas generate prompts with playful tone indicators."""
-    system_prompt = TEST_SYSTEM_PROMPT.format(
+    """Eğlenceli personaların oyuncu ton göstergeleriyle prompt oluşturduğunu test eder."""
+    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
         name=persona["name"],
         tone=persona["tone"],
-        constraints_list=persona["constraints"]
+        constraints=persona["constraints"]
     )
     
-    # Validate prompt structure
+    # Prompt yapısını doğrula
     assert persona["name"] in system_prompt
     assert persona["tone"] in system_prompt
     assert persona["constraints"] in system_prompt
     
-    # Validate expected keywords are present
+    # Beklenen anahtar kelimelerin mevcut olduğunu doğrula
     assert validate_prompt_contains(system_prompt, persona["expected_keywords"])
 
 
 @pytest.mark.parametrize("persona", TECHNICAL_PERSONAS, ids=[p["name"] for p in TECHNICAL_PERSONAS])
 def test_technical_persona_prompt_generation(persona):
-    """Test that technical personas generate prompts with technical tone indicators."""
-    system_prompt = TEST_SYSTEM_PROMPT.format(
+    """Teknik personaların teknik ton göstergeleriyle prompt oluşturduğunu test eder."""
+    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
         name=persona["name"],
         tone=persona["tone"],
-        constraints_list=persona["constraints"]
+        constraints=persona["constraints"]
     )
     
-    # Validate prompt structure
+    # Prompt yapısını doğrula
     assert persona["name"] in system_prompt
     assert persona["tone"] in system_prompt
     assert persona["constraints"] in system_prompt
     
-    # Validate expected keywords are present
+    # Beklenen anahtar kelimelerin mevcut olduğunu doğrula
     assert validate_prompt_contains(system_prompt, persona["expected_keywords"])
 
 
 # ============================================================================
-# TEST CASES: Environment and API Integration Tests
+# TEST DURUMLARI: Ortam ve API Entegrasyon Testleri
 # ============================================================================
 
 def test_build_prompt_with_missing_env_vars():
-    """Test that build_prompt handles missing environment variables gracefully."""
+    """build_prompt'un eksik ortam değişkenlerini uygun şekilde ele aldığını test eder."""
     with patch.dict('os.environ', {}, clear=True):
         with patch('dynamic_prompt_generation.load_dotenv'):
             with patch('builtins.print') as mock_print:
                 result = build_prompt()
-                # Should print error message
+                # Hata mesajı yazdırmalı
                 assert mock_print.called
 
 
 def test_build_prompt_with_valid_persona():
-    """Test build_prompt with valid persona data."""
+    """build_prompt'u geçerli persona verisiyle test eder."""
     test_persona = {
-        "name": "Test Assistant",
+        "name": "Test Asistan",
         "tone": "resmi ve profesyonel",
-        "constraints": "Test constraint"
+        "constraints": "Test kısıtlaması"
     }
     
     with patch('dynamic_prompt_generation.load_dotenv'):
@@ -300,16 +299,16 @@ def test_build_prompt_with_valid_persona():
                     'ABLY_CHANNEL': 'test_channel'
                 }):
                     result = build_prompt()
-                    # Should complete without errors
-                    assert result is None or result is not None  # Either way is fine
+                    # Hatasız tamamlanmalı
+                    assert result is None or result is not None  # Her iki durum da kabul edilebilir
 
 
 def test_persona_fetch_with_api():
-    """Test persona fetch with API URL."""
+    """Persona çekme işlemini API URL ile test eder."""
     mock_response = {
         "name": "API Test Persona",
-        "tone": "test tone",
-        "constraints": "test constraints"
+        "tone": "test tonu",
+        "constraints": "test kısıtlamaları"
     }
     
     with patch('persona.requests.get') as mock_get:
@@ -324,9 +323,9 @@ def test_persona_fetch_with_api():
 
 
 def test_persona_fetch_with_ably():
-    """Test persona fetch with Ably channel."""
+    """Persona çekme işlemini Ably kanalı ile test eder."""
     mock_ably_response = [{
-        "data": '{"name": "Ably Persona", "tone": "ably tone", "constraints": "ably constraints"}'
+        "data": '{"name": "Ably Persona", "tone": "ably tonu", "constraints": "ably kısıtlamaları"}'
     }]
     
     with patch('persona.requests.get') as mock_get:
@@ -340,74 +339,74 @@ def test_persona_fetch_with_ably():
         )
         
         assert result["name"] == "Ably Persona"
-        assert result["tone"] == "ably tone"
-        assert result["constraints"] == "ably constraints"
+        assert result["tone"] == "ably tonu"
+        assert result["constraints"] == "ably kısıtlamaları"
 
 
 # ============================================================================
-# TEST CASES: Tone Matching Validation Tests
+# TEST DURUMLARI: Ton Eşleştirme Doğrulama Testleri
 # ============================================================================
 
 def test_formal_tone_validation():
-    """Test that formal tone personas generate prompts that enforce formal language."""
+    """Formal ton personalarının resmi dili zorunlu kılan prompt'lar oluşturduğunu test eder."""
     formal_persona = FORMAL_PERSONAS[0]
     
-    system_prompt = TEST_SYSTEM_PROMPT.format(
+    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
         name=formal_persona["name"],
         tone=formal_persona["tone"],
-        constraints_list=formal_persona["constraints"]
+        constraints=formal_persona["constraints"]
     )
     
-    # Check that formal tone is explicitly mentioned
+    # Formal tonun açıkça belirtildiğini kontrol et
     assert "resmi" in system_prompt.lower() or "formal" in system_prompt.lower()
     
-    # Check that constraints enforce formal language
+    # Kısıtlamaların formal dili zorunlu kıldığını kontrol et
     assert "argo" in system_prompt.lower() or "nazik" in system_prompt.lower()
 
 
 def test_playful_tone_validation():
-    """Test that playful tone personas generate prompts that allow informal language."""
+    """Eğlenceli ton personalarının gayri resmi dile izin veren prompt'lar oluşturduğunu test eder."""
     playful_persona = PLAYFUL_PERSONAS[0]
     
-    system_prompt = TEST_SYSTEM_PROMPT.format(
+    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
         name=playful_persona["name"],
         tone=playful_persona["tone"],
-        constraints_list=playful_persona["constraints"]
+        constraints=playful_persona["constraints"]
     )
     
-    # Check that playful tone is mentioned
+    # Eğlenceli tonun belirtildiğini kontrol et
     assert "eğlenceli" in system_prompt.lower() or "playful" in system_prompt.lower()
     
-    # Check that constraints allow informal language
+    # Kısıtlamaların gayri resmi dile izin verdiğini kontrol et
     assert "şaka" in system_prompt.lower() or "samimi" in system_prompt.lower()
 
 
 def test_technical_tone_validation():
-    """Test that technical tone personas generate prompts that require technical language."""
+    """Teknik ton personalarının teknik dil gerektiren prompt'lar oluşturduğunu test eder."""
     technical_persona = TECHNICAL_PERSONAS[0]
     
-    system_prompt = TEST_SYSTEM_PROMPT.format(
+    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
         name=technical_persona["name"],
         tone=technical_persona["tone"],
-        constraints_list=technical_persona["constraints"]
+        constraints=technical_persona["constraints"]
     )
     
-    # Check that technical tone is mentioned
+    # Teknik tonun belirtildiğini kontrol et
     assert "teknik" in system_prompt.lower() or "technical" in system_prompt.lower()
     
-    # Check that constraints require technical terms
+    # Kısıtlamaların teknik terimler gerektirdiğini kontrol et
     assert "teknik" in system_prompt.lower() or "terim" in system_prompt.lower()
 
 
 # ============================================================================
-# TEST CASES: Edge Cases and Error Handling
+# TEST DURUMLARI: Uç Durumlar ve Hata Yönetimi
 # ============================================================================
 
 def test_persona_with_missing_name():
-    """Test handling of persona with missing name field."""
+    """İsim alanı eksik olan personanın yönetimini test eder."""
     with patch('dynamic_prompt_generation.fetch_persona', return_value={
-        "tone": "test tone",
-        "constraints": "test constraints"
+        "tone": "test tonu",
+        "constraints": "test kısıtlamaları"
     }):
         with patch('builtins.print'):
             with patch('dynamic_prompt_generation.load_dotenv'):
@@ -417,37 +416,37 @@ def test_persona_with_missing_name():
                     'ABLY_API_KEY': 'test_key',
                     'ABLY_CHANNEL': 'test_channel'
                 }):
-                    # Should handle KeyError gracefully
+                    # KeyError'u uygun şekilde ele almalı
                     try:
                         build_prompt()
                     except KeyError:
-                        # Expected behavior
+                        # Beklenen davranış
                         pass
 
 
 def test_persona_with_empty_constraints():
-    """Test handling of persona with empty constraints."""
-    system_prompt = TEST_SYSTEM_PROMPT.format(
-        name="Test Name",
-        tone="test tone",
-        constraints_list=""
+    """Boş kısıtlamalara sahip personanın yönetimini test eder."""
+    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
+        name="Test İsim",
+        tone="test tonu",
+        constraints=""
     )
     
-    # Should still generate valid prompt
-    assert "Test Name" in system_prompt
-    assert "test tone" in system_prompt
+    # Yine de geçerli prompt oluşturmalı
+    assert "Test İsim" in system_prompt
+    assert "test tonu" in system_prompt
 
 
 def test_prompt_template_formatting():
-    """Test that TEST_SYSTEM_PROMPT template formats correctly with all fields."""
-    test_name = "Test Assistant"
-    test_tone = "test tone"
-    test_constraints = "test constraints"
+    """SYSTEM_PROMPT_TEMPLATE şablonunun tüm alanlarla doğru formatlandığını test eder."""
+    test_name = "Test Asistan"
+    test_tone = "test tonu"
+    test_constraints = "test kısıtlamaları"
     
-    system_prompt = TEST_SYSTEM_PROMPT.format(
+    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
         name=test_name,
         tone=test_tone,
-        constraints_list=test_constraints
+        constraints=test_constraints
     )
     
     assert test_name in system_prompt
@@ -459,42 +458,42 @@ def test_prompt_template_formatting():
 
 
 # ============================================================================
-# COMPREHENSIVE TEST: All 20 Scenarios
+# KAPSAMLI TEST: Tüm 20 Senaryo
 # ============================================================================
 
 @pytest.mark.parametrize("persona", ALL_PERSONAS, ids=[p["name"] for p in ALL_PERSONAS])
 def test_all_persona_scenarios(persona):
-    """Comprehensive test for all 20 persona scenarios."""
-    # Generate system prompt
-    system_prompt = TEST_SYSTEM_PROMPT.format(
+    """Tüm 20 persona senaryosu için kapsamlı test."""
+    # Sistem prompt'unu oluştur
+    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
         name=persona["name"],
         tone=persona["tone"],
-        constraints_list=persona["constraints"]
+        constraints=persona["constraints"]
     )
     
-    # Basic structure validation
+    # Temel yapı doğrulaması
     assert persona["name"] in system_prompt
     assert persona["tone"] in system_prompt
     assert persona["constraints"] in system_prompt
     
-    # Tone-specific validation
+    # Tona özel doğrulama
     tone_lower = persona["tone"].lower()
     if "resmi" in tone_lower or "formal" in tone_lower or "ciddi" in tone_lower:
-        # Formal personas should avoid playful language
+        # Formal personalar eğlenceli dilden kaçınmalı
         assert validate_prompt_avoids(system_prompt, ["eğlenceli", "şaka", "gülmek"])
     elif "eğlenceli" in tone_lower or "playful" in tone_lower or "komik" in tone_lower:
-        # Playful personas should avoid overly formal language
+        # Eğlenceli personalar aşırı formal dilden kaçınmalı
         assert "eğlenceli" in system_prompt.lower() or "samimi" in system_prompt.lower()
     elif "teknik" in tone_lower or "technical" in tone_lower:
-        # Technical personas should emphasize technical terms
+        # Teknik personalar teknik terimleri vurgulamalı
         assert "teknik" in system_prompt.lower() or "technical" in system_prompt.lower()
     
-    # Keyword validation
+    # Anahtar kelime doğrulaması
     assert validate_prompt_contains(system_prompt, persona["expected_keywords"])
 
 
 # ============================================================================
-# RUN TESTS
+# TESTLERİ ÇALIŞTIR
 # ============================================================================
 
 if __name__ == "__main__":
