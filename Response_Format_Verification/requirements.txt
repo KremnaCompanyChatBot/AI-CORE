@@ -1,0 +1,9 @@
+# Requirements for KremnaCompany AI client
+# - Bu proje için doğrudan import edilen paketler listelenmiştir.
+# - Gerekirse sürüm sabitlemesi (pinning) yapabilirsiniz; burada en temel isimler bırakıldı.
+
+python-dotenv
+google-generativeai
+langchain
+langchain-google-genai
+requests
