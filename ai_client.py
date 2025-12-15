@@ -39,7 +39,7 @@ def load_api_configuration() -> str:
     load_dotenv()
     
     # Geriye dönük uyumluluk için OPENAI_API_KEY kullanılıyor
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = os.getenv("API_KEY")
     
     if not api_key or "dummy" in api_key.lower():
         raise AIClientError(
