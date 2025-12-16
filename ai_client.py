@@ -10,6 +10,12 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 
 from persona import fetch_persona
+from persona_db import (
+    init_database, 
+    create_persona as save_persona_to_db,
+    get_persona_by_id,
+    list_personas_simple
+)
 
 
 # Sabitler
@@ -39,7 +45,7 @@ def load_api_configuration() -> str:
     load_dotenv()
     
     # Geriye dönük uyumluluk için OPENAI_API_KEY kullanılıyor
-    api_key = os.getenv("API_KEY")
+    api_key = os.getenv("OPENAI_API_KEY")
     
     if not api_key or "dummy" in api_key.lower():
         raise AIClientError(
@@ -76,6 +82,46 @@ def load_backend_configuration() -> Dict[str, Optional[str]]:
         "token": os.getenv("BACKEND_PANEL_TOKEN"),
         "ably_channel": os.getenv("BACKEND_PANEL_ABLY_CHANNEL"),
         "ably_api_key": os.getenv("BACKEND_PANEL_ABLY_API_KEY")
+    }
+
+
+def get_manual_persona() -> Dict[str, Any]:
+    """
+    Kullanıcıdan manuel olarak persona bilgilerini alır.
+    
+    Dönüş Değeri:
+        Dict[str, Any]: Persona bilgileri
+    """
+    print("\n" + "="*50)
+    print("PERSONA BİLGİLERİNİ GİRİN")
+    print("="*50)
+    
+    name = input("Persona adı: ").strip() or "AI Asistanı"
+    tone = input("Konuşma tonu (örn: arkadaşça, profesyonel): ").strip() or "yardımcı"
+    
+    print("\nKısıtlamalar (her satırda bir tane, bitince boş satır girin):")
+    constraints = []
+    while True:
+        constraint = input("- ").strip()
+        if not constraint:
+            break
+        constraints.append(constraint)
+    
+    constraints_text = "\n".join(constraints) if constraints else "Genel yardım kurallarına uy"
+    
+    print("\n✅ Persona oluşturuldu!")
+    
+    # Veritabanına kaydet
+    try:
+        persona_id = save_persona_to_db(name, tone, constraints_text)
+        print(f"💾 Veritabanına kaydedildi (ID: {persona_id})\n")
+    except Exception as e:
+        print(f"⚠️ Veritabanına kaydedilemedi: {e}\n")
+    
+    return {
+        "name": name,
+        "tone": tone,
+        "constraints": constraints_text
     }
 
 
@@ -248,6 +294,9 @@ def run_chat_loop(
 def main() -> None:
     """Ana program giriş noktası."""
     try:
+        # Veritabanını başlat
+        init_database()
+        
         # API anahtarını yükle ve doğrula
         api_key = load_api_configuration()
         
@@ -260,6 +309,29 @@ def main() -> None:
         
         # Persona'yı yükle (varsa)
         persona = load_persona(backend_config)
+        
+        # Backend'den persona yüklenmediyse manuel giriş sor
+        if not persona:
+            print("\n⚠️ Backend'den persona yüklenemedi.")
+            print("\n1) Manuel persona girişi yap")
+            print("2) Kayıtlı personalardan seç")
+            choice = input("\nSeçiminiz (1/2): ").strip()
+            
+            if choice == '2':
+                list_personas_simple()
+                persona_id = input("\nKullanmak istediğiniz Persona ID: ").strip()
+                try:
+                    persona = get_persona_by_id(int(persona_id))
+                    if persona:
+                        print(f"✅ {persona['name']} yüklendi!")
+                    else:
+                        print("⚠️ Persona bulunamadı, manuel giriş yapılıyor...")
+                        persona = get_manual_persona()
+                except ValueError:
+                    print("⚠️ Geçersiz ID, manuel giriş yapılıyor...")
+                    persona = get_manual_persona()
+            elif choice == '1':
+                persona = get_manual_persona()
         
         # Sohbet döngüsünü başlat
         run_chat_loop(model, persona)
