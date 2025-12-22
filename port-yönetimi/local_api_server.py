@@ -11,9 +11,9 @@ import requests
 import os
 
 # Ayarlanabilir port (varsayılan: 8000)
-PORT = int(os.getenv("LOCAL_API_PORT", 8000))
+PORT = int(os.getenv("LOCAL_API_PORT", 8080))
 # Main sunucunun base URL'i
-MAIN_BASE_URL = os.getenv("MAIN_BASE_URL", "http://localhost:9000")
+MAIN_BASE_URL = os.getenv("MAIN_BASE_URL", "http://localhost:8080")
 
 app = FastAPI()
 

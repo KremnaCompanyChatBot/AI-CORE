@@ -4,11 +4,13 @@ Main dosyasının JSON alıcı endpointi
 Bu dosya, local_api_server.py tarafından gönderilen JSON'u alır ve işleyip yanıt döner.
 """
 
-
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 import uvicorn
+
 
 import sys
 sys.path.append("..")
@@ -31,6 +33,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --------------------------------------------------
+# WEB UI SERVE (Railway + Local uyumlu)
+# --------------------------------------------------
+ROOT_DIR = Path(__file__).resolve().parent.parent   # /app
+WEB_UI_DIR = ROOT_DIR / "web-ui"
+
+# web-ui klasörünü statik yayınla (css/js vs. varsa /web altında servis edilir)
+app.mount("/web", StaticFiles(directory=str(WEB_UI_DIR), html=True), name="web")
+
+# Ana sayfa: direkt chatbot.html
+@app.get("/", include_in_schema=False)
+def serve_chatbot():
+    return FileResponse(str(WEB_UI_DIR / "chatbot.html"))
 
 
 # Basit SQLite bağlantısı (dosya: personas.db)
