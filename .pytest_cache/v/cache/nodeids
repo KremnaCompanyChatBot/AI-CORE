@@ -1,0 +1,4 @@
+[
+  "Selenium/test_chat_api.py::test_chat_missing_fields_returns_error",
+  "Selenium/test_chat_api.py::test_chat_returns_success_and_reply"
+]
