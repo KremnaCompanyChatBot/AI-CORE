@@ -317,6 +317,10 @@
                 metadataHTML = `
                     <div class="message-metadata">
                         <div class="metadata-item">
+                            <span>🤖 Agent:</span>
+                            <span class="metadata-badge">${metadata.agent_id}</span>
+                        </div>
+                        <div class="metadata-item">
                             <span>📊 Konu:</span>
                             <span class="metadata-badge">${metadata.topic_detected}</span>
                         </div>
@@ -397,6 +401,11 @@
                 hideTypingIndicator();
 
                 if (data.status === 'success') {
+                    // Gerçek kullanılan agenti header'da göster
+                    if (data.metadata && data.metadata.agent_id) {
+                        document.getElementById('agentId').textContent = data.metadata.agent_id;
+                    }
+                    
                     // AI yanıtını ekle
                     addMessage('assistant', data.reply, data.metadata);
                     
